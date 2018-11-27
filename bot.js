@@ -68,6 +68,10 @@ var rndemote = 1;
 var start = true;
 var conqueror = false;
 var voiceChannelID = auth.voiceId;
+var inVoiceChannel = false;
+var messageLeft = true;
+var admin = auth.admin;
+var offline = false;
 
 // Configure logger settings
 logger.remove(logger.transports.Console);
@@ -95,6 +99,19 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             message: 'Hello my friends, I am online now. Type \'' + auth.commandPrefix + '\' followed by a key word to get started.'
         });
         start = false;
+    } else if (offline && message.substring(0, 1) == auth.commandPrefix && userID != admin) {
+        var args = message.substring(1).split(' ');
+        var cmd = args[0];
+        var rnd = 0;
+
+        args = args.splice(1);
+        if (cmd == 'online') {
+            offline == false;
+            bot.sendMessage({
+                to: channelID,
+                message: 'Okay I am online now.'
+            });
+        }
     }
     else if (message.substring(0, 1) == auth.commandPrefix) {
         var args = message.substring(1).split(' ');
@@ -206,7 +223,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             case 'whale-snark':
                 bot.sendMessage({
                     to: channelID,
-                    message: 'Nothin like huntin dem.'
+                    message: 'Huntin dem whale snarks. Huntin dem, killin dem, eatin dem. Nothin like huuntin dem whale snarks. Nothin lik it.'
                 });
                 break;
             // !hello
@@ -291,8 +308,17 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             case 'offline':
                 bot.sendMessage({
                     to: channelID,
+                    message: 'Okay I am online now.'
+                });
+                offline = true;
+                break;
+            // !online
+            case 'online':
+                bot.sendMessage({
+                    to: channelID,
                     message: 'Okay I\'ll leave you alone for a bit.'
                 });
+                offline = true;
                 break;
             // !facepalm
             case 'facepalm':
@@ -324,6 +350,20 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                 playMusic(args[0], args.splice(1).join(' '), channelID);
             } else if (args[0] == 'song') {
                 playMusic(args[0], args.splice(1).join(' '), channelID);
+            } //else if (args[0] == 'stop') { FIXME!!!
+            //     bot.sendMessage({
+            //         to: channelID,
+            //         message: 'Okay I will stop playing music now.'
+            //     });
+            //     continuePlay = false;
+            //     playMusic('song', 'ding', channelID);
+            // }
+            else if (args[0] != null) {
+                bot.sendMessage({
+                    to: channelID,
+                    message: 'I am sorry, you need to type in song, album, or stop.'
+                });
+                return;
             } else {
                 if (sounds[rnd] == null) {
                     bot.sendMessage({
@@ -335,11 +375,6 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                 playMusic('song', sounds[rnd], channelID);
             }
             break;
-
-                //!stop - will stop the music FIXME
-            case 'stop':
-                // bot.leaveVoiceChannel(voiceChannelID, {});
-                break;
                 //!vote
             case 'vote':
                 rnd = Math.ceil(Math.random() * 2)
@@ -362,6 +397,20 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                         message: 'The current price of Bitcoin according to CoinDesk is: $' + price
                     });
                 });
+                break;
+                //!albums
+            case 'albums':
+                bot.sendMessage({
+                    to: channelID,
+                    message: 'Here are all the albums:\n' + soundFiles.join('\n')
+                })
+                break;
+                //!songs
+            case 'songs':
+                bot.sendMessage({
+                    to: channelID,
+                    message: 'Here are all the songs:\n' + sounds.join('\n')
+                })
                 break;
             default:
                 bot.sendMessage({
@@ -396,14 +445,14 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             });
         }
     }
-    if (rndemote == 0) {
+    if (rndemote == 0 && !offline) {
         rnd = Math.floor(Math.random() * emote.length);
         bot.sendMessage({
             to: channelID,
             message: emote[rnd]
         });
     }
-    if (conqueror == true) {
+    if (conqueror == true && !offline) {
         rnd = Math.floor(Math.random() * 10);
         var msg = 'Rah! ';
         for (var i = 0; i <= rnd; ++i) {
@@ -488,10 +537,52 @@ function playMusic (type, name, channelID) {
 
     }
 
-    bot.joinVoiceChannel(voiceChannelID, function(error, events) {
-        //Check to see if any errors happen while joining.
-        if (error) return console.error(error);
-      
+    streamMusic (s, channelID);
+}
+
+function streamMusic (s, channelID) {
+    if (!inVoiceChannel) {
+        messageLeft = false;
+        continuePlay = true;
+        bot.joinVoiceChannel(voiceChannelID, function(error, events) {
+            //Check to see if any errors happen while joining.
+            if (error) return console.error(error);
+            inVoiceChannel = true;
+
+            //Then get the audio context
+            bot.getAudioContext(voiceChannelID, function(error, stream) {
+              //Once again, check to see if any errors exist
+              if (error) return console.error(error);
+          
+              //Create a stream to your file and pipe it to the stream
+              //Without {end: false}, it would close up the stream, so make sure to include that.
+              fs.createReadStream('./sounds/' + s).pipe(stream, {end: false});
+              bot.sendMessage({
+                  to: channelID,
+                  message: 'Now jamming out to ' + s
+              });
+              //The stream fires `done` when it's got nothing else to send to Discord.
+              stream.on('done', function() {
+                bot.leaveVoiceChannel(voiceChannelID, {});
+                if (!messageLeft) {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'The song has ended.'
+                    });
+                    inVoiceChannel = false;
+                    messageLeft = true;
+                }
+              });
+            });
+        })
+    } else {
+        if (!continuePlay) {
+            bot.getAudioContext(voiceChannelID, function(error, stream) {
+                stream.stop();
+                stream.on('error',function(err){console.log("AudioContext Error:",err)});
+                if (error) return console.error(error);
+            })
+        }
         //Then get the audio context
         bot.getAudioContext(voiceChannelID, function(error, stream) {
           //Once again, check to see if any errors exist
@@ -499,20 +590,28 @@ function playMusic (type, name, channelID) {
       
           //Create a stream to your file and pipe it to the stream
           //Without {end: false}, it would close up the stream, so make sure to include that.
+          
           fs.createReadStream('./sounds/' + s).pipe(stream, {end: false});
-          bot.sendMessage({
-              to: channelID,
-              message: 'Now jamming out to ' + s
-          });
-      
+          if (continuePlay) {
+              bot.sendMessage({
+                  to: channelID,
+                  message: 'This song ' + s + ' has been add to the que.'
+              });
+          }
           //The stream fires `done` when it's got nothing else to send to Discord.
-          stream.on('done', function() {
+          stream.on('done', function(error) {
+            if (error) return console.error(error);
             bot.leaveVoiceChannel(voiceChannelID, {});
-            bot.sendMessage({
-                to: channelID,
-                message: 'The song has ended.'
-            });
+            if (!messageLeft && !continuePlay) {
+                bot.sendMessage({
+                    to: channelID,
+                    message: 'The song has ended.'
+                });
+                inVoiceChannel = false;
+                messageLeft = true;
+            }
+                
           });
         });
-      });
+    }
 }
