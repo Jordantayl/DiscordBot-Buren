@@ -308,7 +308,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             case 'offline':
                 bot.sendMessage({
                     to: channelID,
-                    message: 'Okay I am online now.'
+                    message: 'Okay I\'ll leave you alone for a bit.'
                 });
                 offline = true;
                 break;
@@ -316,9 +316,9 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             case 'online':
                 bot.sendMessage({
                     to: channelID,
-                    message: 'Okay I\'ll leave you alone for a bit.'
+                    message: 'Okay I am online now.'
                 });
-                offline = true;
+                offline = false;
                 break;
             // !facepalm
             case 'facepalm':
