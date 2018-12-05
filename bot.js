@@ -826,7 +826,6 @@ function streamMusic (s, channelID) {
         } else if (!stopPlayingMusic && !streaming) {
             if (songQue.length > 0) {
                 playMusic('que', songQue.shift(), channelID);
-                console.log(songQue.length);
             } else {
                 rnd = Math.floor(Math.random() * sounds.length); 
                 if (sounds[rnd] == null) {
