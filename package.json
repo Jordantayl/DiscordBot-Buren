@@ -1,9 +1,9 @@
 {
   "name": "dnd-bot",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "A bot that can roll dice and play music in the voice chat. Uses discord.io.",
   "main": "bot.js",
-  "author": "MasterofOld and Pythoncow",
+  "author": "MasterofOld, with help from Pythoncow",
   "dependencies": {
     "discord.io": "https://github.com/woor/discord.io/tarball/gateway_v6",
     "request": "^2.88.0",
