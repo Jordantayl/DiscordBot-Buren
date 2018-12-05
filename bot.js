@@ -17,7 +17,7 @@ var quote = ['All the lessons of history and experience must be lost upon us if 
     'I am altering the deal, pray I do not alter it any further… – Vader',
     'No, I am your father! - Vader',
     'The problem with quotes on the Internet is that it is hard to verify their authenticity. - Abraham Lincoln',
-    'it\'s a trap! - Admiral Ackbar',
+    'It\'s a trap! - Admiral Ackbar',
 ];
 
 var emote = [':no_mouth:',
@@ -58,6 +58,8 @@ var weapon = ['a sword',
     'this thumb',
     'fire',
     'my good looks',
+    'exile',
+    'a death star',
 ];
 
 var soundFiles = fs.readdirSync('./Sounds');
@@ -72,6 +74,13 @@ var inVoiceChannel = false;
 var messageLeft = true;
 var admin = auth.admin;
 var offline = false;
+var gameOn;
+var playlists = new Map();
+var shufflePlay;
+var currentPlaylist;
+var stopPlayingMusic;
+var songQue = [];
+var streaming = false;
 
 // Configure logger settings
 logger.remove(logger.transports.Console);
@@ -113,7 +122,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             });
         }
     }
-    else if (message.substring(0, 1) == auth.commandPrefix) {
+    else if (!gameOn && message.substring(0, 1) == auth.commandPrefix) {
         var args = message.substring(1).split(' ');
         var cmd = args[0];
         var rnd = 0;
@@ -346,19 +355,52 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             //!play
             case 'play':
             rnd = Math.floor(Math.random() * sounds.length)
+            stopPlayingMusic = false;
             if (args[0] == 'album') {
-                playMusic(args[0], args.splice(1).join(' '), channelID);
+                bot.sendMessage({
+                    to: channelID,
+                    message: 'This function does not exist.'
+                })
             } else if (args[0] == 'song') {
-                playMusic(args[0], args.splice(1).join(' '), channelID);
-            } //else if (args[0] == 'stop') { FIXME!!!
-            //     bot.sendMessage({
-            //         to: channelID,
-            //         message: 'Okay I will stop playing music now.'
-            //     });
-            //     continuePlay = false;
-            //     playMusic('song', 'ding', channelID);
-            // }
-            else if (args[0] != null) {
+                if (songQue.length <= 10) {
+                    try {
+                        songQue.push(getSongFile(args.splice(1).join(' ')));
+                        bot.sendMessage({
+                            to: channelID,
+                            message: 'Song was add to the que.'
+                        });
+                    } catch (error) {
+                        if (error == 'tooManyOfSameType') {
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'There are quite a few files by that name, please type the full name.'
+                            });
+                        }
+                        else if (error == 'noSuchElementException') {
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'That song does not exist.'
+                            });
+                        }
+                    }
+                } else {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'The current que is full. You need to let the que finish a song or ask the admin to empty it.'
+                    });
+                }
+            } else if (args[0] == 'stop') {
+                bot.sendMessage({
+                    to: channelID,
+                    message: 'Okay I will stop playing music now.'
+                });
+                stopPlayingMusic = true;
+            } else if (args[0] == 'que') {
+                bot.sendMessage({
+                    to: channelID,
+                    message: 'There are '+ songQue.length + ' items waiting in the que. Here\'s the current que:\n' + songQue.join('\n')
+                });
+            } else if (args[0] != null) {
                 bot.sendMessage({
                     to: channelID,
                     message: 'I am sorry, you need to type in song, album, or stop.'
@@ -372,7 +414,9 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                     });
                     break;
                 }
-                playMusic('song', sounds[rnd], channelID);
+                if (!inVoiceChannel) {
+                    playMusic('song', sounds[rnd], channelID);
+                }
             }
             break;
                 //!vote
@@ -407,19 +451,207 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                 break;
                 //!songs
             case 'songs':
-                bot.sendMessage({
-                    to: channelID,
-                    message: 'Here are all the songs:\n' + sounds.join('\n')
-                })
+                var sList;
+                var name = args.join(' ');
+                if (args[0] == null) {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'you need to add album name to the end.'
+                    })
+                } else {
+                    for (var i = 0; i < soundFiles.length; ++i) {
+                        if (soundFiles[i].toLowerCase().includes(name.toLowerCase()) == true) {
+                            albumName = soundFiles[i];
+                            sList = fs.readdirSync('./Sounds/' + soundFiles[i] + '/')
+                        }
+                    }
+                    if (sList == null) {
+                        bot.sendMessage({
+                            to: channelID,
+                            message: 'No album called \'' + albumName + '\' was found.'
+                        })
+                    } else {
+                        bot.sendMessage({
+                            to: channelID,
+                            message: 'Here are all the song in ' + albumName + ':\n' + sList.join('\n')
+                        })
+                    }
+                }
                 break;
+                //!playlist
+            case 'playlist':
+                if (args[0] == undefined) {
+                        if (!playlists.has(user)) {
+                            playlists.set(user, new Playlist(user + '\'s Playlist'));
+                            bot.sendMessage ({
+                                to: channelID,
+                                message: user + ' just created a new playlist!'
+                            })
+                        } else {
+                            shufflePlay = true;
+                            currentPlaylist = playlists.get(user);
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'I am now jamming out to ' + currentPlaylist.getName() +'.'
+                            })
+                        }
+                } else if (args[0] == 'stop') {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'Okay, I\'ll stop playing music after this song.'
+                    })
+                    shufflePlay = false;
+                } else if (args[0] == 'name') {
+                        if (playlist.has(name)) {
+                            if (!shufflePlay) {
+                                shufflePlay = true;
+                            }
+                            currentPlaylist = playlists.get(user);
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'I am now jamming out to ' + currentPlaylist.getName() + '.'
+                            })
+                        } else {
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'That playlist does not exist. Try check the name again.'
+                            })
+                        }
+                } else if (args[0] == 'length') {
+                    if (args[1] == undefined) {
+                        if (playlists.has(user)) {
+                            playlistTitle = playlists.get(user).getName();
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'It has ' +  playlists.get(playlistTitle).getPlaylistLength() + ' songs.'
+                            })
+                        } else {
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'You need to create a playlist first or type the creators name or title of the playlist after \'length\'.'
+                            })
+                        }
+                    } else {
+                        playlistTitle = args.splice(1).join(' ');
+                        if (playlists.has(playlistTitle)) {
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'It has ' +  playlists.get(playlistTitle).getPlaylistLength() + ' songs.'
+                            })
+                        } else {
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'That playlist does not exist. Try check the name again.'
+                            })
+                        }
+                    }
+                } else if (args[0] == 'songs') {
+                    if (args[1] == null) {
+                        if (playlists.has(user)) {
+                            playlistTitle = playlists.get(user).getName();
+                            bot.sendMessage({
+                                to: channelID,                                                    //IMPORTANT PLAYLISTS.GET(USER)
+                                message: 'Here are all the songs for ' + playlistTitle + ':\n' +  playlists.get(user).getPlaylist().join('\n')
+                            })
+                        } else {
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'You need to create a playlist first or type the creators name or title of the playlist after \'songs\'.'
+                            })
+                        }
+                    } else {
+                        playlistTitle = args.splice(1).join(' ');
+                        if (playlists.has(playlistTitle)) {
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'Here are all the songs for ' + playlistTitle + ':\n' +  playlists.get(playlistTitle).getPlaylist().join('\n')
+                            })
+                        } else {
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'That playlist does not exist. Try checking the name again.'
+                            })
+                        }
+                    }
+                } else if (args[0] == 'add') {
+                    songName = args.splice(1).join(' ');
+                    if (playlists.has(user)) {
+                        try {
+                            playlists.get(user).add(songName);
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'Song added from your playlist.'
+                            })
+                        } catch (err) {
+                            if (err == "noSuchElementException") {
+                                bot.sendMessage({
+                                    to: channelID,
+                                    message: 'That song does not exist so it cannot be added.'
+                                })
+                            } else if (err == "tooManyOfSameType") {
+                                bot.sendMessage({
+                                    to: channelID,
+                                    message: 'Many songs share that same name. Refine your search.'
+                                })
+                            } else {
+                                console.log(err);
+                            }
+                        }
+                    } else {
+                        bot.sendMessage({
+                            to: channelID,
+                            message: 'You haven\'t created a playlist yet! Do \'!playlist\' to initailize your playlist.'
+                        })
+                    }
+                } else if (args[0] == 'remove') {
+                        songName = args.splice(1).join(' ');
+                        if (playlists.has(user)) {
+                            try {
+                                playlists.get(user).remove(songName);
+                                bot.sendMessage({
+                                    to: channelID,
+                                    message: 'Song removed from your playlist.'
+                                })
+                            } catch (err) {
+                                if (err == "noSuchElementException") {
+                                    bot.sendMessage({
+                                        to: channelID,
+                                        message: 'That song does not exist so it cannot be removed.'
+                                    })
+                                } else if (err == "tooManyOfSameType") {
+                                    bot.sendMessage({
+                                        to: channelID,
+                                        message: 'Many songs in the playlist share that same name. Refine your search.'
+                                    })
+                                }
+                            }
+                        } else {
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'You haven\'t created a playlist yet! Do \'!playlist\' to initailize your playlist.'
+                            })
+                        }
+                }
+                break;
+                //!game
+            // case 'game':
+            //     if (args[0] == null) {
+            //         gameOn = true;
+            //         bot.sendMessage({
+            //             to: channelID,
+            //             message: 'I will teleport you to the '
+            //         });
+            //     }
+            //     break;
             default:
                 bot.sendMessage({
                     to: channelID,
                     message: 'I\'m sorry, but you got me confused at \'' + cmd + '.\''
                 });
         }
-    }
-    else if (message.toLowerCase().indexOf(auth.name.toLowerCase()) >= 0) {
+    } else if (gameOn && message.substring(0, 1) == auth.commandPrefix) {
+
+    } else if (message.toLowerCase().indexOf(auth.name.toLowerCase()) >= 0) {
         if (message.toLowerCase().indexOf('offline') >= 0) {
             bot.sendMessage({
                 to: channelID,
@@ -456,7 +688,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
         rnd = Math.floor(Math.random() * 10);
         var msg = 'Rah! ';
         for (var i = 0; i <= rnd; ++i) {
-            msg.concat('Rah! ')
+            msg.concat('Rah!')
         }
         bot.sendMessage({
             to: channelID,
@@ -465,6 +697,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
     }
 });
 
+//gets all the albums in Sounds
 function getSounds () {
     var s = [];
     var tempArray = [];
@@ -509,7 +742,7 @@ function playMusic (type, name, channelID) {
     } // plays by song name
     else if (type == 'song') {
         for (var i = 0; i < soundFiles.length; ++i) {
-            var tempList = fs.readdirSync('./Sounds/' + soundFiles[i] + '/')
+            var tempList = fs.readdirSync('./sounds/' + soundFiles[i] + '/')
             for (var j = 0; j < tempList.length; ++j) {
                 if (tempList[j].toLowerCase().includes(name.toLowerCase()) == true) {
                     if (s != null) {
@@ -536,82 +769,133 @@ function playMusic (type, name, channelID) {
         }
 
     }
+    else if (type == 'playlist shuffle') {
+    } else if (type == 'que') {
+        s = name;
+    }
 
-    streamMusic (s, channelID);
-}
-
-function streamMusic (s, channelID) {
     if (!inVoiceChannel) {
         messageLeft = false;
-        continuePlay = true;
         bot.joinVoiceChannel(voiceChannelID, function(error, events) {
             //Check to see if any errors happen while joining.
             if (error) return console.error(error);
             inVoiceChannel = true;
+        })
+    }
 
-            //Then get the audio context
-            bot.getAudioContext(voiceChannelID, function(error, stream) {
-              //Once again, check to see if any errors exist
-              if (error) return console.error(error);
-          
-              //Create a stream to your file and pipe it to the stream
-              //Without {end: false}, it would close up the stream, so make sure to include that.
-              fs.createReadStream('./sounds/' + s).pipe(stream, {end: false});
-              bot.sendMessage({
-                  to: channelID,
-                  message: 'Now jamming out to ' + s
-              });
-              //The stream fires `done` when it's got nothing else to send to Discord.
-              stream.on('done', function() {
-                bot.leaveVoiceChannel(voiceChannelID, {});
-                if (!messageLeft) {
+    if (!streaming) {
+        streaming = true;
+        setTimeout(function () {
+            streamMusic (s, channelID);
+            streaming = false;
+        }, 1000);
+    }
+    
+}
+
+//plays the music in the voice channel
+function streamMusic (s, channelID) {
+    var currentStream = fs.createReadStream('./sounds/' + s);
+    
+    //Then get the audio context
+    bot.getAudioContext(voiceChannelID, function(error, stream) {
+      //Once again, check to see if any errors exist
+      if (error) return console.error(error);
+  
+      //Create a stream to your file and pipe it to the stream
+      //Without {end: false}, it would close up the stream, so make sure to include that.
+      
+      currentStream.pipe(stream, {end: false});
+            bot.sendMessage({
+              to: channelID,
+              message: 'Now jamming out to ' + s
+            });
+
+      //The stream fires `done` when it's got nothing else to send to Discord.
+      stream.on('done', function() {
+        if (!messageLeft && stopPlayingMusic) {
+            bot.leaveVoiceChannel(voiceChannelID, {});
+            bot.sendMessage({
+                to: channelID,
+                message: 'The song has ended.'
+            });
+            inVoiceChannel = false;
+            messageLeft = true;
+        } else if (shufflePlay) {
+            //Todo
+        } else if (!stopPlayingMusic && !streaming) {
+            if (songQue.length > 0) {
+                playMusic('que', songQue.shift(), channelID);
+                console.log(songQue.length);
+            } else {
+                rnd = Math.floor(Math.random() * sounds.length); 
+                if (sounds[rnd] == null) {
                     bot.sendMessage({
                         to: channelID,
-                        message: 'The song has ended.'
+                        message: 'I am sorry, something went wrong. Try again.'
                     });
-                    inVoiceChannel = false;
-                    messageLeft = true;
                 }
-              });
-            });
-        })
-    } else {
-        if (!continuePlay) {
-            bot.getAudioContext(voiceChannelID, function(error, stream) {
-                stream.stop();
-                stream.on('error',function(err){console.log("AudioContext Error:",err)});
-                if (error) return console.error(error);
-            })
-        }
-        //Then get the audio context
-        bot.getAudioContext(voiceChannelID, function(error, stream) {
-          //Once again, check to see if any errors exist
-          if (error) return console.error(error);
-      
-          //Create a stream to your file and pipe it to the stream
-          //Without {end: false}, it would close up the stream, so make sure to include that.
-          
-          fs.createReadStream('./sounds/' + s).pipe(stream, {end: false});
-          if (continuePlay) {
-              bot.sendMessage({
-                  to: channelID,
-                  message: 'This song ' + s + ' has been add to the que.'
-              });
-          }
-          //The stream fires `done` when it's got nothing else to send to Discord.
-          stream.on('done', function(error) {
-            if (error) return console.error(error);
-            bot.leaveVoiceChannel(voiceChannelID, {});
-            if (!messageLeft && !continuePlay) {
-                bot.sendMessage({
-                    to: channelID,
-                    message: 'The song has ended.'
-                });
-                inVoiceChannel = false;
-                messageLeft = true;
+                playMusic('song', sounds[rnd], channelID);
             }
-                
-          });
-        });
+        }
+      });
+    });
+}
+
+//Creates a custom playlist for the user who can change the playlist up.
+function Playlist (name) {
+    this.name = name
+    this.playlist = ['./Sounds/sfx/ding.mp3']
+    this.add = function(name) {
+        try {
+            var s = getSongFile(name);
+        } catch (err) {
+            throw err;
+        }
+        this.playlist.push(s);
     }
+    this.remove = function(name) {
+        if (!readablePlaylist.includes(name)) {
+            throw "noSuchElementException";
+        } else {
+            try {
+                var s = getSongFile(name);
+            } catch (err) {
+                throw err;
+            }
+            this.playlist = playlist.filter(s);
+        }
+    }
+    this.getName = function() {
+        return this.name;
+    }
+    this.getPlaylistLength = function () {
+        return this.playlist.length;
+    }
+    this.getPlaylist = function () {
+        return this.playlist;
+    }
+}
+
+function getSongFile (name) {
+    var s;
+    var sList = [];
+    for (var i = 0; i < soundFiles.length; ++i) {
+        var tempList = fs.readdirSync('./sounds/' + soundFiles[i] + '/')
+        for (var j = 0; j < tempList.length; ++j) {
+            if (tempList[j].toLowerCase().includes(name.toLowerCase()) == true) {
+                if (s != null) {
+                    sList.push(s);
+                }
+                s =  soundFiles[i] + '/' + tempList[j]
+            }
+        }
+    }
+    if (sList.length > 1) {
+        throw "tooManyOfSameType";
+    } else if (s == null) {
+        throw "noSuchElementException";
+    }
+
+    return s;
 }
