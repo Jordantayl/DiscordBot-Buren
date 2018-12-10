@@ -1,7 +1,7 @@
 {
   "name": "dnd-bot",
-  "version": "1.2.1",
-  "description": "A bot that can roll dice and play music in the voice chat. Uses discord.io.",
+  "version": "1.2.3",
+  "description": "A bot that can roll dice, play music in the voice chat and other things. Uses discord.io.",
   "main": "bot.js",
   "author": "MasterofOld, with help from Pythoncow",
   "dependencies": {
