@@ -81,6 +81,7 @@ var currentPlaylist;
 var stopPlayingMusic;
 var songQue = [];
 var streaming = false;
+var prevPlayed = [];
 
 // Configure logger settings
 logger.remove(logger.transports.Console);
@@ -336,22 +337,6 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                     file: './images/Facepalm.gif'
                 });
                 break;
-            // !conqueror - spams rah
-            case 'conqueror':
-                if (conqueror == true) {
-                    bot.sendMessage({
-                        to: channelID,
-                        message: 'Let the terror stop'
-                    });
-                    conqueror = false;
-                } else {
-                    bot.sendMessage({
-                        to: channelID,
-                        message: 'Let the terror begin'
-                    });
-                    conqueror = true;
-                }
-                break;
             //!play
             case 'play':
             rnd = Math.floor(Math.random() * sounds.length)
@@ -446,7 +431,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             case 'albums':
                 bot.sendMessage({
                     to: channelID,
-                    message: 'Here are all the albums:\n' + soundFiles.join('\n')
+                    message: 'Here are all the albums: ' + soundFiles.join(', ')
                 })
                 break;
                 //!songs
@@ -496,11 +481,11 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                             })
                         }
                 } else if (args[0] == 'stop') {
+                    shufflePlay = false;
                     bot.sendMessage({
                         to: channelID,
                         message: 'Okay, I\'ll stop playing music after this song.'
                     })
-                    shufflePlay = false;
                 } else if (args[0] == 'name') {
                         if (playlist.has(name)) {
                             if (!shufflePlay) {
@@ -523,7 +508,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                             playlistTitle = playlists.get(user).getName();
                             bot.sendMessage({
                                 to: channelID,
-                                message: 'It has ' +  playlists.get(playlistTitle).getPlaylistLength() + ' songs.'
+                                message: 'Your playlist has ' +  playlists.get(playlistTitle).getPlaylistLength() + ' songs.'
                             })
                         } else {
                             bot.sendMessage({
@@ -788,6 +773,14 @@ function playMusic (type, name, channelID) {
         setTimeout(function () {
             streamMusic (s, channelID);
             streaming = false;
+
+            //Updates prevously played to make sure that songs do not play again for upto five songs
+            if (prevPlayed.length < 5) {
+                prevPlayed.push(s);
+            } else {
+                prevPlayed.shift();
+                prevPlayed.push(s);
+            }
         }, 1000);
     }
     
@@ -827,14 +820,20 @@ function streamMusic (s, channelID) {
             if (songQue.length > 0) {
                 playMusic('que', songQue.shift(), channelID);
             } else {
-                rnd = Math.floor(Math.random() * sounds.length); 
-                if (sounds[rnd] == null) {
+                rnd = Math.floor(Math.random() * sounds.length);
+                var s = sounds[rnd];
+                if (s == null) {
                     bot.sendMessage({
                         to: channelID,
                         message: 'I am sorry, something went wrong. Try again.'
                     });
+                } else if (prevPlayed.includes(s)) {
+                    while (prevPlayed.includes(s)) {
+                        rnd = Math.floor(Math.random() * sounds.length);
+                        s = getSongFile(s);
+                    }
                 }
-                playMusic('song', sounds[rnd], channelID);
+                playMusic('song', s, channelID);
             }
         }
       });
