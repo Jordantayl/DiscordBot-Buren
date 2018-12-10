@@ -687,7 +687,7 @@ function getSounds () {
     var s = [];
     var tempArray = [];
     for (var i = 0; i < soundFiles.length; ++i) {
-        tempArray.push(fs.readdirSync('./Sounds/' + soundFiles[i] + '/'));
+        tempArray.push(fs.readdirSync('./sounds/' + soundFiles[i] + '/'));
     }
 
     for (var i = 0; i < tempArray.length; ++i) {
@@ -703,7 +703,6 @@ function getSounds () {
 /**
  * playMusic allows the bot to play music either at random, by song name, or randomly by file name.
  */
-
 function playMusic (type, name, channelID) {
     var s;
     var sList = [];
@@ -840,7 +839,7 @@ function streamMusic (s, channelID) {
     });
 }
 
-//Creates a custom playlist for the user who can change the playlist up.
+//Creates a custom playlist for the user who can change the playlist up. FIXME!!!
 function Playlist (name) {
     this.name = name
     this.playlist = ['./Sounds/sfx/ding.mp3']
