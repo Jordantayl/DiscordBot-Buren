@@ -20,6 +20,39 @@ var quote = ['All the lessons of history and experience must be lost upon us if 
     'It\'s a trap! - Admiral Ackbar',
 ];
 
+var adjectives = ['Lovely',
+'Eager',
+'Brave',
+'Coward',
+'Wacky',
+'Troubled',
+'Serious',
+'Unusual',
+'Dramatic',
+'Remarkable',
+'Classy',
+'Fair',
+'Jealous',
+'Disastrous',
+'Abandoned',
+'Electric',
+'Grey',
+'Flimsy',
+'Dispensable',
+'Selective',
+'Bitter',
+'Faithful',
+'Cynical',
+'Possessive',
+'Defective',
+'Drunk',
+'Quick',
+'Ordinary',
+'Grotesque',
+'Supreme',
+'Marvelous',
+];
+
 var emote = [':no_mouth:',
     ':slight_frown:',
     ':smiley:',
@@ -62,13 +95,36 @@ var weapon = ['a sword',
     'a death star',
 ];
 
+var encounters = ['skeleton',
+'goblin',
+'hobgoblin',
+'banit',
+'ghost',
+'giant goat',
+'devil',
+'monkey',
+'demon',
+'chicken',
+'chick',
+'B1 battle droid',
+'stromtrooper',
+'nazi soldier',
+'clone trooper',
+'knight',
+'sith',
+'bounty hunter',
+'Buren\'s minion',
+'orc',
+'navy seal',
+];
+
 var soundFiles = fs.readdirSync('./Sounds');
 var sounds = getSounds();
+var party = [];
 
 var target = ' ';
 var rndemote = 1;
 var start = true;
-var conqueror = false;
 var voiceChannelID = auth.voiceId;
 var inVoiceChannel = false;
 var messageLeft = true;
@@ -122,8 +178,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                 message: 'Okay I am online now.'
             });
         }
-    }
-    else if (!gameOn && message.substring(0, 1) == auth.commandPrefix) {
+    } else if (!gameOn && message.substring(0, 1) == auth.commandPrefix) {
         var args = message.substring(1).split(' ');
         var cmd = args[0];
         var rnd = 0;
@@ -419,6 +474,51 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                     });
                 }
                 break;
+                //!y/n - yes/no
+            case 'y/n':
+                rnd = Math.ceil(Math.random() * 2)
+                if (rnd == 1) {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'Yes.'
+                    });
+                } else {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'No.'
+                    });
+                }
+                break;
+                //!a/d - agreed/disagree
+            case 'a/d':
+                rnd = Math.ceil(Math.random() * 2)
+                if (rnd == 1) {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'I agreed.'
+                    });
+                } else {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'I disagreed.'
+                    });
+                }
+                break;
+                //!t/f - true/false
+            case 't/f':
+                rnd = Math.ceil(Math.random() * 2)
+                if (rnd == 1) {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'True.'
+                    });
+                } else {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'False.'
+                    });
+                }
+                break;
             case 'bitcoin':
                 bitcoin.getBitcoinPrice(function (price) {
                     bot.sendMessage({
@@ -465,7 +565,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                 break;
                 //!playlist
             case 'playlist':
-                if (args[0] == undefined) {
+                if (args[0] == undefined || args == null) {
                         if (!playlists.has(user)) {
                             playlists.set(user, new Playlist(user + '\'s Playlist'));
                             bot.sendMessage ({
@@ -475,19 +575,32 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                         } else {
                             shufflePlay = true;
                             currentPlaylist = playlists.get(user);
-                            bot.sendMessage({
-                                to: channelID,
-                                message: 'I am now jamming out to ' + currentPlaylist.getName() +'.'
-                            })
+                            if (currentPlaylist.getPlaylistLength() > 5) {
+                                bot.sendMessage({
+                                    to: channelID,
+                                    message: 'I am now jamming out to ' + currentPlaylist.getName() +'.'
+                                })
+                                if (!inVoiceChannel) {
+                                    var tempPlaylist = currentPlaylist.getPlaylist();
+                                    rnd = Math.floor(Math.random() * tempPlaylist.length);
+                                    playMusic('playlist shuffle', tempPlaylist[rnd], channelID);
+                                }
+                            } else {
+                                bot.sendMessage({
+                                    to: channelID,
+                                    message: currentPlaylist.getName() + ' is to small. Please add more songs.'
+                                })
+                            }
                         }
                 } else if (args[0] == 'stop') {
                     shufflePlay = false;
+                    stopPlayingMusic = true;
                     bot.sendMessage({
                         to: channelID,
                         message: 'Okay, I\'ll stop playing music after this song.'
                     })
                 } else if (args[0] == 'name') {
-                        if (playlist.has(name)) {
+                        if (playlists.has(name)) {
                             if (!shufflePlay) {
                                 shufflePlay = true;
                             }
@@ -496,6 +609,11 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                                 to: channelID,
                                 message: 'I am now jamming out to ' + currentPlaylist.getName() + '.'
                             })
+                            if (!inVoiceChannel) {
+                                var tempPlaylist = currentPlaylist.getPlaylist();
+                                rnd = Math.floor(Math.random() * tempPlaylist.length);
+                                playMusic('playlist shuffle', tempPlaylist[rnd], channelID);
+                            }
                         } else {
                             bot.sendMessage({
                                 to: channelID,
@@ -508,7 +626,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                             playlistTitle = playlists.get(user).getName();
                             bot.sendMessage({
                                 to: channelID,
-                                message: 'Your playlist has ' +  playlists.get(playlistTitle).getPlaylistLength() + ' songs.'
+                                message: 'Your playlist has ' +  playlists.get(user).getPlaylistLength() + ' songs.'
                             })
                         } else {
                             bot.sendMessage({
@@ -521,7 +639,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                         if (playlists.has(playlistTitle)) {
                             bot.sendMessage({
                                 to: channelID,
-                                message: 'It has ' +  playlists.get(playlistTitle).getPlaylistLength() + ' songs.'
+                                message: 'It has ' +  playlists.get(user).getPlaylistLength() + ' songs.'
                             })
                         } else {
                             bot.sendMessage({
@@ -562,6 +680,13 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                     songName = args.splice(1).join(' ');
                     if (playlists.has(user)) {
                         try {
+                            if (playlists.get(user).getPlaylist().indexOf(getSongFile(songName)) >= 0) {
+                                bot.sendMessage({
+                                    to: channelID,
+                                    message: 'That song is already in you playlist.'
+                                })
+                                break;
+                            }
                             playlists.get(user).add(songName);
                             bot.sendMessage({
                                 to: channelID,
@@ -608,6 +733,8 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                                         to: channelID,
                                         message: 'Many songs in the playlist share that same name. Refine your search.'
                                     })
+                                } else {
+                                    console.log(err);
                                 }
                             }
                         } else {
@@ -618,24 +745,136 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                         }
                 }
                 break;
+            //!adjective
+            case 'adjective':
+                rnd = Math.floor(Math.random() * adjectives.length);
+                bot.sendMessage ({
+                    to: channelID,
+                    message: args.join(' ') + ' the ' + adjectives[rnd]
+                })
+                break;
+
+            //!encounter - gives a random encounter with the defualt being and number between 1 and 6
+            case 'encounter':
+                var rndAmount;
+                if (args[0] == 'd3') {
+                    rndAmount = Math.ceil(Math.random() * 3);
+                } else if (args[0] == 'd4') {
+                    rndAmount = Math.ceil(Math.random() * 4);
+                } else if (args[0] == 'd6') {
+                    rndAmount = Math.ceil(Math.random() * 6);
+                } else if (args[0] == 'd8') {
+                    rndAmount = Math.ceil(Math.random() * 8);
+                } else if (args[0] == 'd10') {
+                    rndAmount = Math.ceil(Math.random() * 10);
+                } else if (args[0] == 'd12') {
+                    rndAmount = Math.ceil(Math.random() * 12);
+                } else if (args[0] == 'd20') {
+                    rndAmount = Math.ceil(Math.random() * 20);
+                } else if (args[0] == 'd100') {
+                    rndAmount = Math.ceil(Math.random() * 100);
+                } else if (args[0] == undefined || args[0] == null) {
+                    rndAmount = Math.ceil(Math.random() * 6);
+                } else {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'You need to leave this area blank or add a dice amount such as a d4 or d6.'
+                    })
+                    break;
+                }
+                rnd = Math.floor(Math.random() * encounters.length);
+                if (rndAmount > 1) {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'You encounter ' + rndAmount + ' ' + encounters[rnd] + 's.'
+                    })
+                } else {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'You encounter ' + rndAmount + ' ' + encounters[rnd] + '.'
+                    })
+                }
+                break;
+
                 //!game
-            // case 'game':
-            //     if (args[0] == null) {
-            //         gameOn = true;
-            //         bot.sendMessage({
-            //             to: channelID,
-            //             message: 'I will teleport you to the '
-            //         });
-            //     }
-            //     break;
+            case 'game':
+                    gameOn = true;
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'We will let the games begin! If you wish to partipate in the game, please do !game join. To stop the game do !game stop.'
+                    });
+                break;
             default:
                 bot.sendMessage({
                     to: channelID,
                     message: 'I\'m sorry, but you got me confused at \'' + cmd + '.\''
                 });
+                break;
         }
     } else if (gameOn && message.substring(0, 1) == auth.commandPrefix) {
+        var args = message.substring(1).split(' ');
+        var cmd = args[0];
+        var rnd = 0;
 
+        args = args.splice(1);
+        switch (cmd) {
+        //!game - game commands
+            case 'game':
+                if (args[0] == 'stop') { //stop the game and resets it
+                    gameOn = false;
+                    party = [];
+                }
+                break;
+
+        //!encounter - gives a random encounter with the defualt being and number between 1 and 6
+            case 'encounter':
+                var rndAmount;
+                if (args[0] == 'd3') {
+                    rndAmount = Math.ceil(Math.random() * 3);
+                } else if (args[0] == 'd4') {
+                    rndAmount = Math.ceil(Math.random() * 4);
+                } else if (args[0] == 'd6') {
+                    rndAmount = Math.ceil(Math.random() * 6);
+                } else if (args[0] == 'd8') {
+                    rndAmount = Math.ceil(Math.random() * 8);
+                } else if (args[0] == 'd10') {
+                    rndAmount = Math.ceil(Math.random() * 10);
+                } else if (args[0] == 'd12') {
+                    rndAmount = Math.ceil(Math.random() * 12);
+                } else if (args[0] == 'd20') {
+                    rndAmount = Math.ceil(Math.random() * 20);
+                } else if (args[0] == 'd100') {
+                    rndAmount = Math.ceil(Math.random() * 100);
+                } else if (args[0] == undefined || args[0] == null) {
+                    rndAmount = Math.ceil(Math.random() * 6);
+                } else {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'You need to leave this area blank or add a dice amount such as a d4 or d6.'
+                    })
+                    break;
+                }
+                rnd = Math.floor(Math.random() * encounters.length);
+                if (rndAmount > 1) {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'You encounter ' + rndAmount + ' ' + encounters[rnd] + 's.'
+                    })
+                } else {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'You encounter ' + rndAmount + ' ' + encounters[rnd] + '.'
+                    })
+                }
+                break;
+
+            default:
+                bot.sendMessage({
+                    to: channelID,
+                    message: 'I\'m sorry, but you got me confused at \'' + cmd + '.\''
+                });
+                break;
+        }
     } else if (message.toLowerCase().indexOf(auth.name.toLowerCase()) >= 0) {
         if (message.toLowerCase().indexOf('offline') >= 0) {
             bot.sendMessage({
@@ -667,17 +906,6 @@ bot.on('message', function (user, userID, channelID, message, evt) {
         bot.sendMessage({
             to: channelID,
             message: emote[rnd]
-        });
-    }
-    if (conqueror == true && !offline) {
-        rnd = Math.floor(Math.random() * 10);
-        var msg = 'Rah! ';
-        for (var i = 0; i <= rnd; ++i) {
-            msg.concat('Rah!')
-        }
-        bot.sendMessage({
-            to: channelID,
-            message: msg
         });
     }
 });
@@ -754,6 +982,7 @@ function playMusic (type, name, channelID) {
 
     }
     else if (type == 'playlist shuffle') {
+        s = name;
     } else if (type == 'que') {
         s = name;
     }
@@ -814,7 +1043,16 @@ function streamMusic (s, channelID) {
             inVoiceChannel = false;
             messageLeft = true;
         } else if (shufflePlay) {
-            //Todo
+            var tempPlaylist = currentPlaylist.getPlaylist();
+            rnd = Math.floor(Math.random() * tempPlaylist.length);
+            var s = tempPlaylist[rnd];
+            while (prevPlayed.indexOf(s) >= 0) {
+                rnd = Math.floor(Math.random() * tempPlaylist.length);
+                s = tempPlaylist[rnd];
+                console.log('prevPlayed Loop Active...')
+            }
+            playMusic('playlist shuffle', s, channelID);
+            
         } else if (!stopPlayingMusic && !streaming) {
             if (songQue.length > 0) {
                 playMusic('que', songQue.shift(), channelID);
@@ -826,11 +1064,10 @@ function streamMusic (s, channelID) {
                         to: channelID,
                         message: 'I am sorry, something went wrong. Try again.'
                     });
-                } else if (prevPlayed.includes(s)) {
-                    while (prevPlayed.includes(s)) {
-                        rnd = Math.floor(Math.random() * sounds.length);
-                        s = getSongFile(s);
-                    }
+                }
+                while (prevPlayed.indexOf(s) >= 0) {
+                    rnd = Math.floor(Math.random() * sounds.length);
+                    s = getSongFile(s);c
                 }
                 playMusic('song', s, channelID);
             }
@@ -842,7 +1079,7 @@ function streamMusic (s, channelID) {
 //Creates a custom playlist for the user who can change the playlist up. FIXME!!!
 function Playlist (name) {
     this.name = name
-    this.playlist = ['./Sounds/sfx/ding.mp3']
+    this.playlist = ['sfx/ding.mp3']
     this.add = function(name) {
         try {
             var s = getSongFile(name);
@@ -852,16 +1089,14 @@ function Playlist (name) {
         this.playlist.push(s);
     }
     this.remove = function(name) {
-        if (!readablePlaylist.includes(name)) {
-            throw "noSuchElementException";
-        } else {
             try {
                 var s = getSongFile(name);
             } catch (err) {
                 throw err;
             }
-            this.playlist = playlist.filter(s);
-        }
+            this.playlist = this.playlist.filter(function(songName){
+                return songName != s;
+            });
     }
     this.getName = function() {
         return this.name;
