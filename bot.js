@@ -118,8 +118,48 @@ var encounters = ['skeleton',
 'navy seal',
 ];
 
+var gameList = ['for honor',
+'garry\'s mod',
+'age of empires 2',
+'minecraft',
+'barotrauma',
+'project zomboid',
+]
+
+var adjLandscape = [
+    'lovey',
+    'cold',
+    'dry',
+    'pitful',
+    'small',
+    'dark',
+    'bright',
+    'dying',
+    'large',
+    'homely',
+]
+
+var landscapes = [
+    'desert',
+    'jungle',
+    'forest',
+    'hillside',
+    'swamp',
+    'space station',
+    'village',
+    'city',
+    'mountain',
+    'grass land',
+]
+
+var cheeseNCrackers = new cheeseNCrackers();
+cheeseNCrackersWinner = 0;
+var cheeseNCrackersEnded = false;
+
 var soundFiles = fs.readdirSync('./Sounds');
 var sounds = getSounds();
+var adTime = Math.ceil(Math.random() * 5);
+console.log("adTime: " + adTime);
 var party = [];
 
 var target = ' ';
@@ -130,7 +170,7 @@ var inVoiceChannel = false;
 var messageLeft = true;
 var admin = auth.admin;
 var offline = false;
-var gameOn;
+var gameOn = false;
 var playlists = new Map();
 var shufflePlay;
 var currentPlaylist;
@@ -164,6 +204,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             to: channelID,
             message: 'Hello my friends, I am online now. Type \'' + auth.commandPrefix + '\' followed by a key word to get started.'
         });
+        cheeseNCrackers.newBoard();
         start = false;
     } else if (offline && message.substring(0, 1) == auth.commandPrefix && userID != admin) {
         var args = message.substring(1).split(' ');
@@ -185,12 +226,18 @@ bot.on('message', function (user, userID, channelID, message, evt) {
 
         args = args.splice(1);
         switch (cmd) {
-            // !ping
+            // !ping - resets the bot's presence
             case 'ping':
                 bot.sendMessage({
                     to: channelID,
                     message: 'It\'s just simply terrible. Try resting you\'re router or restarting you\'re computer.'
                 });
+                if (userID == admin) {
+                    bot.setPresence({
+                        game: null
+                    });
+                    bot.leaveVoiceChannel(voiceChannelID, {});
+                }
                 break;
             // !d20 - rolls a d20
             case 'd20':
@@ -441,10 +488,33 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                     message: 'There are '+ songQue.length + ' items waiting in the que. Here\'s the current que:\n' + songQue.join('\n')
                 });
             } else if (args[0] != null) {
-                bot.sendMessage({
-                    to: channelID,
-                    message: 'I am sorry, you need to type in song, album, or stop.'
-                });
+                if (songQue.length <= 10) {
+                    try {
+                        songQue.push(getSongFile(args.splice(1).join(' ')));
+                        bot.sendMessage({
+                            to: channelID,
+                            message: 'Song was add to the que.'
+                        });
+                    } catch (error) {
+                        if (error == 'tooManyOfSameType') {
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'There are quite a few files by that name, please type the full name.'
+                            });
+                        }
+                        else if (error == 'noSuchElementException') {
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'That song does not exist.'
+                            });
+                        }
+                    }
+                } else {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'The current que is full. You need to let the que finish a song or ask the admin to empty it.'
+                    });
+                }
                 return;
             } else {
                 if (sounds[rnd] == null) {
@@ -455,7 +525,11 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                     break;
                 }
                 if (!inVoiceChannel) {
-                    playMusic('song', sounds[rnd], channelID);
+                    if (songQue.length <= 0) {
+                        playMusic('song', sounds[rnd], channelID);
+                    } else {
+                        playMusic('que', songQue.shift(), channelID);
+                    }
                 }
             }
             break;
@@ -748,10 +822,21 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             //!adjective
             case 'adjective':
                 rnd = Math.floor(Math.random() * adjectives.length);
-                bot.sendMessage ({
-                    to: channelID,
-                    message: args.join(' ') + ' the ' + adjectives[rnd]
-                })
+                if (args[0] == null || args[0] == undefined) {
+                    bot.sendMessage ({
+                        to: channelID,
+                        message: user + ' the ' + adjectives[rnd]
+                    });
+                    bot.editNickname({
+                        userID: userID,
+                        nick: user + ' the ' + adjectives[rnd]
+                    });
+                } else {
+                    bot.sendMessage ({
+                        to: channelID,
+                        message: args.join(' ') + ' the ' + adjectives[rnd]
+                    })
+                }
                 break;
 
             //!encounter - gives a random encounter with the defualt being and number between 1 and 6
@@ -783,26 +868,80 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                     break;
                 }
                 rnd = Math.floor(Math.random() * encounters.length);
+                var adjRnd = Math.floor(Math.random() * adjectives.length);
                 if (rndAmount > 1) {
                     bot.sendMessage({
                         to: channelID,
-                        message: 'You encounter ' + rndAmount + ' ' + encounters[rnd] + 's.'
+                        message: 'You encounter ' + rndAmount + ' ' + adjectives[adjRnd].toLowerCase() + ' ' + encounters[rnd] + 's.'
                     })
                 } else {
                     bot.sendMessage({
                         to: channelID,
-                        message: 'You encounter ' + rndAmount + ' ' + encounters[rnd] + '.'
+                        message: 'You encounter ' + rndAmount + ' ' + adjectives[adjRnd].toLowerCase() + ' ' + encounters[rnd] + '.'
                     })
                 }
                 break;
-
-                //!game
+            //!landscape - gives a random landscape
+            case 'landscape':
+                rnd = Math.floor(Math.random() * landscapes.length);
+                var adjRnd = Math.floor(Math.random() * adjLandscape.length);
+                bot.sendMessage({
+                    to: channelID,
+                    message: 'You are now in a ' + adjLandscape[adjRnd].toLowerCase() + ' ' + landscapes[rnd] + '.'
+                })
+                break;
+            //!game
             case 'game':
                     gameOn = true;
                     bot.sendMessage({
                         to: channelID,
                         message: 'We will let the games begin! If you wish to partipate in the game, please do !game join. To stop the game do !game stop.'
                     });
+                break;
+            //!ch&cr
+            case 'ch&cr':
+                    if (args[0] == 'new') {
+                        cheeseNCrackers.newBoard();
+                        bot.sendMessage({
+                            to: channelID,
+                            message: 'Created new cheese and crackers board. It is player ' + cheeseNCrackers.getTurn() + '\'s turn.'
+                        });
+                    } else if (args[0] == 'move' && (args[1] != null || args[1] != undefined)) {
+                        try {
+                            cheeseNCrackers.move(args[1].charAt(0), args[1].charAt(1));
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'It is player ' + cheeseNCrackers.getTurn() + '\'s turn.'
+                            });
+                        } catch (err) {
+                            console.log(err);
+                            console.log(args[1]);
+                            bot.sendMessage({
+                                to: channelID,
+                                message: 'You can only select an empty tile, noted by the :x:, on the board.'
+                            });
+                        }
+                    } else {
+                        bot.sendMessage({
+                            to: channelID,
+                            message: 'Please, type a command for cheese and crackers.'
+                        });
+                        break;
+                    }
+
+                    if (cheeseNCrackersEnded && (cheeseNCrackersWinner > 0 && cheeseNCrackersWinner < 3)) {
+                        bot.sendMessage({
+                            to: channelID,
+                            message: 'Player ' + cheeseNCrackersWinner + ' won the cheese and cracker dinner! Type \'ch&cr new\' to play again'
+                        });
+                    } else if (cheeseNCrackersEnded) {
+                        bot.sendMessage({
+                            to: channelID,
+                            message: 'A plate full of food, and only I get to eat because you all tied! Type \'ch&cr new\' to play again'
+                        });
+                    }
+
+                    cheeseNCrackers.printBoard(channelID);
                 break;
             default:
                 bot.sendMessage({
@@ -823,9 +962,74 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                 if (args[0] == 'stop') { //stop the game and resets it
                     gameOn = false;
                     party = [];
+                } else if (args[0] == 'join') {
+                    //TODO
                 }
                 break;
-
+        // !d20 - rolls a d20
+        case 'd20':
+            rnd = Math.ceil(Math.random() * 20);
+            bot.sendMessage({
+                to: channelID,
+                message: 'You got ' + rnd + '.'
+            });
+            break;
+        // !d100 - rolls a d100
+        case 'd100':
+            rnd = Math.ceil(Math.random() * 100);
+            bot.sendMessage({
+                to: channelID,
+                message: 'You got ' + rnd + '.'
+            });
+            break;
+        // !d12 - rolls a d12
+        case 'd12':
+            rnd = Math.ceil(Math.random() * 12);
+            bot.sendMessage({
+                to: channelID,
+                message: 'You got ' + rnd + '.'
+            });
+            break;
+        // !d10 - rolls a d10
+        case 'd10':
+            rnd = Math.ceil(Math.random() * 10);
+            bot.sendMessage({
+                to: channelID,
+                message: 'You got ' + rnd + '.'
+            });
+            break;
+        // !d8 - rolls a d8
+        case 'd8':
+            rnd = Math.ceil(Math.random() * 8);
+            bot.sendMessage({
+                to: channelID,
+                message: 'You got ' + rnd + '.'
+            });
+            break;
+        // !d6 - rolls a d6
+        case 'd6':
+            rnd = Math.ceil(Math.random() * 6);
+            bot.sendMessage({
+                to: channelID,
+                message: 'You got ' + rnd + '.'
+            });
+            break;
+        // !d4 - rolls a d4
+        case 'd4':
+            rnd = Math.ceil(Math.random() * 4);
+            bot.sendMessage({
+                to: channelID,
+                message: 'You got ' + rnd + '.'
+            });
+            break;
+        // !d3 - rolls a d3
+        case 'd3':
+            rnd = Math.ceil(Math.random() * 3);
+            bot.sendMessage({
+                to: channelID,
+                message: 'You got ' + rnd + '.'
+            });
+            break;
         //!encounter - gives a random encounter with the defualt being and number between 1 and 6
             case 'encounter':
                 var rndAmount;
@@ -881,6 +1085,11 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                 to: channelID,
                 message: 'I am always listening, ' + user + '.'
             });
+            bot.setPresence({
+                game: {name: 'everyone',
+                    type: 2,
+                }
+            });
         } else if (message.toLowerCase().indexOf('killed') >= 0 || message.toLowerCase().indexOf('kill') >= 0 || message.toLowerCase().indexOf('monster') >= 0) {
             bot.sendMessage({
                 to: channelID,
@@ -894,10 +1103,31 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                 to: channelID,
                 message: 'I would love to. I\'ll get into the game right now.'
             });
+            for (var i = 0; gameList.length > i; ++i) {
+                if (message.toLowerCase().indexOf(gameList[i]) >= 0){
+                    bot.setPresence({
+                        game: {name: gameList[i],
+                            type: 1,
+                        }
+                    });
+                    break;
+                } else {
+                    bot.setPresence({
+                        game: {name: 'games with ' + user,
+                            type: 1,
+                        }
+                    });
+                }
+            }
         } else {
             bot.sendMessage({
                 to: channelID,
                 message: 'I can\'t right now. :slight_frown:'
+            });
+            bot.setPresence({
+                game: {name: user,
+                    type: Math.ceil(Math.random() * 2) + 1,
+                }
             });
         }
     }
@@ -981,6 +1211,9 @@ function playMusic (type, name, channelID) {
         }
 
     }
+    else if (type == 'ad') {
+        s = name;
+    }
     else if (type == 'playlist shuffle') {
         s = name;
     } else if (type == 'que') {
@@ -1001,6 +1234,8 @@ function playMusic (type, name, channelID) {
         setTimeout(function () {
             streamMusic (s, channelID);
             streaming = false;
+            // adTime--;
+            // console.log("adTime: " + adTime);
 
             //Updates prevously played to make sure that songs do not play again for upto five songs
             if (prevPlayed.length < 5) {
@@ -1034,7 +1269,11 @@ function streamMusic (s, channelID) {
 
       //The stream fires `done` when it's got nothing else to send to Discord.
       stream.on('done', function() {
-        if (!messageLeft && stopPlayingMusic) {
+        if (!stopPlayingMusic && !messageLeft && adTime <= 0) {
+            adTime = Math.ceil(Math.random() * 5 + 3);
+            s = getAdFile();
+            playMusic('ad', s, channelID);
+        } else if (!messageLeft && stopPlayingMusic) {
             bot.leaveVoiceChannel(voiceChannelID, {});
             bot.sendMessage({
                 to: channelID,
@@ -1076,7 +1315,7 @@ function streamMusic (s, channelID) {
     });
 }
 
-//Creates a custom playlist for the user who can change the playlist up. FIXME!!!
+//Creates a custom playlist for the user who can change the playlist up.
 function Playlist (name) {
     this.name = name
     this.playlist = ['sfx/ding.mp3']
@@ -1130,4 +1369,184 @@ function getSongFile (name) {
     }
 
     return s;
+}
+
+function getAdFile () {
+    var s;
+    var adList = fs.readdirSync('./sounds/commercials/');
+    s = 'commercials/' + adList[Math.floor(Math.random() * adList.length)];
+    return s;
+}
+
+function player () {
+    
+}
+
+//A game of cheese and crackers, a tic-tac-toe variant
+function cheeseNCrackers() {
+    this.cheeseNCrackersBoard;
+    this.turn;
+
+    //resets the board
+    this.newBoard = function() {
+        cheeseNCrackersBoard = [];
+        for (var i = 0; i < 9; i++) {
+                cheeseNCrackersBoard.push(":x:");
+        }
+        turn = Math.ceil(Math.random() * 2);
+        cheeseNCrackersWinner = 0;
+        cheeseNCrackersEnded = false;
+    }
+
+    //moves the piece and throws invaildMove if the player can't move there or indexOutOfBoundsExpection if the 
+    this.move = function(letter, number) {
+        letter = letter.toLowerCase();
+        var girdNum = 0;
+        if ((letter != 'a' && letter !='b' && letter != 'c') || (number > 3 || number < 0)) {
+            throw "invaildMove" + letter;
+        }
+        switch (letter) {
+            //row a
+            case 'a':
+                girdNum = Number(number) - 1;
+            break;
+            //row b
+            case 'b':
+                girdNum = Number(number) + 2;
+            break;
+            //row c
+            case 'c':
+                girdNum = Number(number) + 5;
+            break;
+            //should never activate
+            default:
+            throw "invaildLetter";
+        }
+        
+        if (turn == 1) {
+            if (cheeseNCrackersBoard[girdNum] == ":x:") {
+                cheeseNCrackersBoard[girdNum] = ":rice_cracker:";
+                cheeseNCrackers.switchTurn();
+            } else {
+                throw "invaildMove " + girdNum;
+            }
+        } else {
+            if (cheeseNCrackersBoard[girdNum] == ":x:") {
+                cheeseNCrackersBoard[girdNum] = ":cheese:";
+                cheeseNCrackers.switchTurn();
+            } else {
+                throw "invaildMove " + girdNum;
+            }
+        }
+
+        cheeseNCrackers.checkThreeInRow();
+    }
+
+    //switches the turn
+    this.switchTurn = function() {
+        if (turn == 1) {
+            turn = 2;
+        } else {
+            turn = 1;
+        }
+    }
+
+    //checks to see if there are three in a row
+    this.checkThreeInRow = function() {
+        var cheeseNum = 0;
+        var crackersNum = 0;
+        var totalFilledNum = 0;
+
+        //checks for col and row wins
+        for (var i = 0; i < 9; i += 3) {
+
+            //searchs the rows for filled squares
+            for (var j = i; j < i + 3; j++) {
+                if (cheeseNCrackersBoard[j] == ":cheese:") {
+                    cheeseNum++;
+                    totalFilledNum++;
+                } else if (cheeseNCrackersBoard[j] == ":rice_cracker:") {
+                    crackersNum++;
+                    totalFilledNum++;
+                }
+            }
+
+            //checks to see if a row victory was achieved
+            if (cheeseNum == 3) {
+                cheeseNCrackers.victory(1);
+                return;
+            } else if (crackersNum == 3) {
+                cheeseNCrackers.victory(2);
+                return;
+            }
+
+            //if a tie was achieved
+            if (totalFilledNum == 9) {
+                cheeseNCrackers.victory(3);
+                return;
+            }
+
+            //resets the count
+            cheeseNum = 0;
+            crackersNum = 0;
+
+            //searchs the col for filled squares
+            for (var j = i; j <= i + 6; j += 3) {
+                if (cheeseNCrackersBoard[j] == ":cheese:") {
+                    cheeseNum++;
+                } else if (cheeseNCrackersBoard[j] == ":rice_cracker:") {
+                    crackersNum++;
+                }
+            }
+
+            //checks to see if a col victory was achieved
+            if (cheeseNum == 3) {
+                cheeseNCrackers.victory(1);
+                return;
+            } else if (crackersNum == 3) {
+                cheeseNCrackers.victory(2);
+                return;
+            }
+
+            //resets the count
+            cheeseNum = 0;
+            crackersNum = 0;
+        }
+
+        //checks for dianogal victories
+        if (cheeseNCrackersBoard[0] == ':cheese:' && cheeseNCrackersBoard[4] == ':cheese:' && cheeseNCrackersBoard[8] == ':cheese:') {
+            cheeseNCrackers.victory(1);
+            return;
+        } else if (cheeseNCrackersBoard[2] == ':cheese:' && cheeseNCrackersBoard[4] == ':cheese:' && cheeseNCrackersBoard[6] == ':cheese:') {
+            cheeseNCrackers.victory(1);
+            return;
+        } else if (cheeseNCrackersBoard[0] == ':rice_cracker:' && cheeseNCrackersBoard[4] == ':rice_cracker:' && cheeseNCrackersBoard[8] == ':rice_cracker:') {
+            cheeseNCrackers.victory(1);
+            return;
+        } else if (cheeseNCrackersBoard[2] == ':rice_cracker:' && cheeseNCrackersBoard[4] == ':rice_cracker:' && cheeseNCrackersBoard[6] == ':rice_cracker:') {
+            cheeseNCrackers.victory(1);
+            return;
+        }
+    }
+
+    //sets the victory condition
+    this.victory = function(winner) {
+        cheeseNCrackersWinner = winner;
+        cheeseNCrackersEnded = true;
+    }
+
+    //gets the turn
+    this.getTurn = function() {
+        return turn;
+    }
+
+    //prints the board
+    this.printBoard = function(channelID) {
+        bot.sendMessage({
+            to: channelID,
+            message: cheeseNCrackersBoard[0] + ' | ' + cheeseNCrackersBoard[1] + ' | ' + cheeseNCrackersBoard[2] + ' |\n'
+            + cheeseNCrackersBoard[3] + ' | ' + cheeseNCrackersBoard[4] + ' | ' + cheeseNCrackersBoard[5] + ' |\n'
+            + cheeseNCrackersBoard[6] + ' | ' + cheeseNCrackersBoard[7] + ' | ' + cheeseNCrackersBoard[8] + ' |\n'
+        });
+    }
 }
