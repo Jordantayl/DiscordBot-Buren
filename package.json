@@ -6,7 +6,9 @@
   "author": "Jordantayl, with help from Pythoncow",
   "dependencies": {
     "discord.io": "https://github.com/woor/discord.io/tarball/gateway_v6",
+    "opusscript": "0.0.6",
     "request": "^2.88.0",
-    "winston": "^3.1.0"
+    "winston": "^3.1.0",
+    "ytdl-core": "^0.29.2"
   }
 }

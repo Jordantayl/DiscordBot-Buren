@@ -3,6 +3,8 @@ var logger = require('winston');
 var auth = require('./auth.json');
 var getMeme = require('./getMeme.js');
 var bitcoin = require('./getBitcoinPrice.js');
+var storyGenerator = require('./storyGenerator.js');
+var ytdl = require('ytdl-core');
 var fs = require('fs');
 var quote = ['All the lessons of history and experience must be lost upon us if we are content to trust alone to the peculiar advantages we happen to possess. - ' + auth.name,
     'Don\'t cry because it\'s over, smile because it happened. - Dr. Sesuss',
@@ -124,6 +126,9 @@ var gameList = ['for honor',
 'minecraft',
 'barotrauma',
 'project zomboid',
+'unturned',
+'stick fight',
+'sea of theives'
 ]
 
 var adjLandscape = [
@@ -137,6 +142,21 @@ var adjLandscape = [
     'dying',
     'large',
     'homely',
+]
+
+var convStarters = [
+    'I disagree with that statement.',
+    'I agree with that statement.',
+    'Yes.',
+    'No.',
+    'Ofcourse.',
+    'Sorry, did you mean to summon me?',
+    'No, I am Buren.',
+    'Can you repeat that?',
+    'Yes, I am Buren.',
+    'Sorry,',
+    'Oh no,',
+    'I have work to do,',
 ]
 
 var landscapes = [
@@ -157,13 +177,25 @@ cheeseNCrackersWinner = 0;
 var cheeseNCrackersEnded = false;
 
 var soundFiles = fs.readdirSync('./Sounds');
+for (var i = 0; i < soundFiles.length; i++) {
+    if (soundFiles[i] == 'desktop.ini') {
+        soundFiles.splice(i, 1);
+    }
+}
+
+var sfxFiles = fs.readdirSync('./soundeffects')
+for (var i = 0; i < sfxFiles.length; i++) {
+    if (sfxFiles[i] == 'desktop.ini') {
+        sfxFiles.splice(i, 1);
+    }
+}
+
 var sounds = getSounds();
 var adTime = Math.ceil(Math.random() * 5);
-console.log("adTime: " + adTime);
 var party = [];
 
 var target = ' ';
-var rndemote = 1;
+var rndsaying = 1;
 var start = true;
 var voiceChannelID = auth.voiceId;
 var inVoiceChannel = false;
@@ -174,10 +206,11 @@ var gameOn = false;
 var playlists = new Map();
 var shufflePlay;
 var currentPlaylist;
-var stopPlayingMusic;
+var stopPlayingMusic = false;
 var songQue = [];
 var streaming = false;
 var prevPlayed = [];
+var sfxPlaying = false;
 
 // Configure logger settings
 logger.remove(logger.transports.Console);
@@ -198,7 +231,7 @@ bot.on('ready', function (evt) {
 bot.on('message', function (user, userID, channelID, message, evt) {
     // Our bot needs to know if it will execute a command
     // It will listen for messages that will start with `!`
-    rndemote = Math.floor(Math.random() * 10);
+    rndsaying = Math.floor(Math.random() * 10);
     if (start == true) {
         bot.sendMessage({
             to: channelID,
@@ -439,6 +472,23 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                     file: './images/Facepalm.gif'
                 });
                 break;
+
+            //!emptyque
+            case 'emptyque':
+                if (userID == admin) {
+                    songQue = [];
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'The que is now empty.'
+                    });
+                } else {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'Only admins have access to that command.'
+                    });
+                }
+            break;
+
             //!play
             case 'play':
             rnd = Math.floor(Math.random() * sounds.length)
@@ -487,6 +537,26 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                     to: channelID,
                     message: 'There are '+ songQue.length + ' items waiting in the que. Here\'s the current que:\n' + songQue.join('\n')
                 });
+            } else if (args[0] == 'youtube'){ //WIP
+                if ((args[1] != undefined || args[1] != null) && args[1].indexOf('youtube.com') >= 0) {
+                    if (songQue.length <= 10) {
+                        songQue.push(args[1]);
+                        bot.sendMessage({
+                            to: channelID,
+                            message: 'Song was added to the que.'
+                        }); 
+                    } else {
+                        bot.sendMessage({
+                            to: channelID,
+                            message: 'The current que is full. You need to let the que finish a song or ask the admin to empty it.'
+                        }); 
+                    }
+                } else {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'I am sorry you can only play songs from youtube and a full link is required.'
+                    });
+                }
             } else if (args[0] != null) {
                 if (songQue.length <= 10) {
                     try {
@@ -533,7 +603,28 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                 }
             }
             break;
-                //!vote
+
+            //!sfx
+            case 'sfx':
+            if (inVoiceChannel == true) {
+                bot.sendMessage({
+                    to: channelID,
+                    message: 'You need to wait first.'
+                })
+            } else {
+                if (args[0] == 'list') {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: sfxFiles.join(' | ')
+                    })
+                } else {
+                    sfxPlaying = true;
+                    var sfx = args.join(' ');
+                    playMusic ('sfx', sfx, channelID);
+                }
+            }
+            break;
+            //!vote
             case 'vote':
                 rnd = Math.ceil(Math.random() * 2)
                 if (rnd == 1) {
@@ -627,7 +718,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                     if (sList == null) {
                         bot.sendMessage({
                             to: channelID,
-                            message: 'No album called \'' + albumName + '\' was found.'
+                            message: 'No album called \'' + name + '\' was found.'
                         })
                     } else {
                         bot.sendMessage({
@@ -928,7 +1019,6 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                         });
                         break;
                     }
-
                     if (cheeseNCrackersEnded && (cheeseNCrackersWinner > 0 && cheeseNCrackersWinner < 3)) {
                         bot.sendMessage({
                             to: channelID,
@@ -940,8 +1030,68 @@ bot.on('message', function (user, userID, channelID, message, evt) {
                             message: 'A plate full of food, and only I get to eat because you all tied! Type \'ch&cr new\' to play again'
                         });
                     }
-
                     cheeseNCrackers.printBoard(channelID);
+                break;
+            //!birthday
+            case "birthday":
+                bot.sendMessage({
+                    to: channelID,
+                    message: user + ' wishes ' + args.join(" ") + ' a happy birthday!'
+                })
+                break;
+            //!slap
+            case "slap":
+                if (admin == userID) {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'I slap you, ' + args.join(" ") + '.'
+                    })
+                } else {
+                    bot.sendMessage({
+                        to: channelID,
+                        message: 'I slap you, ' + user + '.'
+                    })
+                }
+                break;
+            //!story
+            case "story":
+                if (args[0] == null || args[0] == undefined) {
+                    bot.sendMessage({
+                        to:channelID,
+                        message: storyGenerator.generate(encounters[randomIndex(encounters.length)], 
+                        landscapes[randomIndex(landscapes.length)],
+                        Math.ceil(Math.random() * 10), encounters[randomIndex(encounters.length)],
+                        adjectives[randomIndex(adjectives.length)].toLowerCase() + " " + encounters[randomIndex(encounters.length)],
+                        0, adjectives)
+                    });
+                } else if (args[1] == null || args[1] == undefined) {
+                    bot.sendMessage({
+                        to:channelID,
+                        message: storyGenerator.generate(args[0], 
+                        landscapes[randomIndex(landscapes.length)],
+                        Math.ceil(Math.random() * 10), encounters[randomIndex(encounters.length)],
+                        adjectives[randomIndex(adjectives.length)].toLowerCase() + " " + encounters[randomIndex(encounters.length)],
+                        0, adjectives)
+                    });
+                } else if (args[2] == null || args[2] == undefined) {
+                    bot.sendMessage({
+                        to:channelID,
+                        message: storyGenerator.generate(args[0], 
+                        landscapes[randomIndex(landscapes.length)],
+                        Math.ceil(Math.random() * 10), args[1],
+                        adjectives[randomIndex(adjectives.length)].toLowerCase() + " " + encounters[randomIndex(encounters.length)],
+                        0, adjectives)
+                    });
+                } else {
+                    bot.sendMessage({
+                        to:channelID,
+                        message: storyGenerator.generate(args[0], 
+                        landscapes[randomIndex(landscapes.length)],
+                        Math.ceil(Math.random() * 10), args[1],
+                        args[2],
+                        0, adjectives)
+                    });
+                }
                 break;
             default:
                 bot.sendMessage({
@@ -1093,7 +1243,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
         } else if (message.toLowerCase().indexOf('killed') >= 0 || message.toLowerCase().indexOf('kill') >= 0 || message.toLowerCase().indexOf('monster') >= 0) {
             bot.sendMessage({
                 to: channelID,
-                message: 'I am no monster ' + user + '. But I belive you are.'
+                message: 'I am no monster ' + user + '. But I beleive you are.'
             });
         }
     } else if (message.indexOf('up for') >= 0 || message.indexOf('on tonight') >= 0 || message.indexOf('down for') >= 0) {
@@ -1131,12 +1281,23 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             });
         }
     }
-    if (rndemote == 0 && !offline) {
-        rnd = Math.floor(Math.random() * emote.length);
-        bot.sendMessage({
-            to: channelID,
-            message: emote[rnd]
-        });
+    if (rndsaying == 0 && !offline) {
+        var rnd = Math.ceil(Math.random() * 2);
+        if (rnd == 1) {
+            rnd = Math.floor(Math.random() * emote.length);
+            bot.sendMessage({
+                to: channelID,
+                message: emote[rnd]
+            });
+        }
+        else if (rnd == 2) {
+            rnd = Math.floor(Math.random() * convStarters.length);
+            bot.sendMessage({
+                to: channelID,
+                message: convStarters[rnd]
+            });  
+        }
+        
     }
 });
 
@@ -1183,6 +1344,7 @@ function playMusic (type, name, channelID) {
         }
     } // plays by song name
     else if (type == 'song') {
+        sfxPlaying = false;
         for (var i = 0; i < soundFiles.length; ++i) {
             var tempList = fs.readdirSync('./sounds/' + soundFiles[i] + '/')
             for (var j = 0; j < tempList.length; ++j) {
@@ -1212,12 +1374,27 @@ function playMusic (type, name, channelID) {
 
     }
     else if (type == 'ad') {
+        sfxPlaying = false;
         s = name;
     }
     else if (type == 'playlist shuffle') {
+        sfxPlaying = false;
         s = name;
-    } else if (type == 'que') {
+    }
+    else if (type == 'que') {
+        sfxPlaying = false;
         s = name;
+    }
+    else if (type == 'sfx') {
+        for (var i = 0; i < sfxFiles.length; i++) {
+            if (sfxFiles[i].toLowerCase().includes(name.toLowerCase()) == true) {
+                sList.push('./soundeffects/' + sfxFiles[i])
+            }
+        }
+        s = sList[Math.floor(Math.random() * (sList.length))];
+        if (s == null || s == undefined) {
+            s = './soundeffects/ding.mp3';
+        }
     }
 
     if (!inVoiceChannel) {
@@ -1229,7 +1406,7 @@ function playMusic (type, name, channelID) {
         })
     }
 
-    if (!streaming) {
+    if (!streaming && !sfxPlaying) {
         streaming = true;
         setTimeout(function () {
             streamMusic (s, channelID);
@@ -1245,14 +1422,32 @@ function playMusic (type, name, channelID) {
                 prevPlayed.push(s);
             }
         }, 1000);
+    } else {
+        setTimeout(function () {
+            streamMusic (s, channelID); 
+            sfxPlaying = true;
+        }, 1000);
     }
     
 }
 
 //plays the music in the voice channel
 function streamMusic (s, channelID) {
-    var currentStream = fs.createReadStream('./sounds/' + s);
-    
+    var currentStream;
+    // if (s.indexOf('youtube.com') < 0) { //WIP
+    if (sfxPlaying == false) {
+        bot.sendMessage({
+            to: channelID,
+            message: 'Now jamming out to ' + s
+        });
+        currentStream = fs.createReadStream('./sounds/' + s);
+    } else {
+        bot.sendMessage({
+            to: channelID,
+            message: s
+        });
+        currentStream = fs.ReadStream(s);
+    }
     //Then get the audio context
     bot.getAudioContext(voiceChannelID, function(error, stream) {
       //Once again, check to see if any errors exist
@@ -1262,10 +1457,6 @@ function streamMusic (s, channelID) {
       //Without {end: false}, it would close up the stream, so make sure to include that.
       
       currentStream.pipe(stream, {end: false});
-            bot.sendMessage({
-              to: channelID,
-              message: 'Now jamming out to ' + s
-            });
 
       //The stream fires `done` when it's got nothing else to send to Discord.
       stream.on('done', function() {
@@ -1292,7 +1483,7 @@ function streamMusic (s, channelID) {
             }
             playMusic('playlist shuffle', s, channelID);
             
-        } else if (!stopPlayingMusic && !streaming) {
+        } else if (!stopPlayingMusic && !streaming && !sfxPlaying) {
             if (songQue.length > 0) {
                 playMusic('que', songQue.shift(), channelID);
             } else {
@@ -1310,6 +1501,10 @@ function streamMusic (s, channelID) {
                 }
                 playMusic('song', s, channelID);
             }
+        } else if (sfxPlaying) {
+            sfxPlaying = true;
+            bot.leaveVoiceChannel(voiceChannelID, {});
+            inVoiceChannel = false;
         }
       });
     });
@@ -1318,7 +1513,7 @@ function streamMusic (s, channelID) {
 //Creates a custom playlist for the user who can change the playlist up.
 function Playlist (name) {
     this.name = name
-    this.playlist = ['sfx/ding.mp3']
+    this.playlist = ['soundeffects/ding.mp3']
     this.add = function(name) {
         try {
             var s = getSongFile(name);
@@ -1549,4 +1744,9 @@ function cheeseNCrackers() {
             + cheeseNCrackersBoard[6] + ' | ' + cheeseNCrackersBoard[7] + ' | ' + cheeseNCrackersBoard[8] + ' |\n'
         });
     }
+}
+
+//Gets a random index from a list and returns it
+function randomIndex (listSize) {
+    return Math.floor(Math.random() * listSize);
 }
